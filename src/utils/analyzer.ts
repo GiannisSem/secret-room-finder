@@ -1,4 +1,4 @@
-import type {RoomType, AnalysisGrid, CellAnalysis} from '../types';
+import type { RoomType, AnalysisGrid, CellAnalysis } from '../types';
 
 export const GRID_SIZE = 13;
 
@@ -13,7 +13,6 @@ function inBounds(r: number, c: number): boolean {
     return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
 }
 
-// Calcola distanze da Start con BFS attraverso stanze reali
 function calculateDistancesFromStart(grid: RoomType[][]): number[][] {
     const dist: number[][] = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(-1));
     let startPos: { r: number; c: number } | null = null;
@@ -50,7 +49,6 @@ function calculateDistancesFromStart(grid: RoomType[][]): number[][] {
     return dist;
 }
 
-// 1. Secret Room Analyzer
 export function analyzeSecret(grid: RoomType[][]): AnalysisGrid {
     const rawScores: (CellAnalysis | null)[][] = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
     let maxNeighbors = 0;
@@ -95,7 +93,6 @@ export function analyzeSecret(grid: RoomType[][]): AnalysisGrid {
         }
     }
 
-    // Se esistono stanze con 2+ vicini, elimina le 1-connessione (regola fallback Isaac)
     if (maxNeighbors >= 2) {
         for (let r = 0; r < GRID_SIZE; r++) {
             for (let c = 0; c < GRID_SIZE; c++) {
@@ -110,7 +107,6 @@ export function analyzeSecret(grid: RoomType[][]): AnalysisGrid {
     return normalizePercentages(rawScores);
 }
 
-// 2. Super Secret Room Analyzer
 export function analyzeSuperSecret(grid: RoomType[][]): AnalysisGrid {
     const rawScores: (CellAnalysis | null)[][] = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
     const distances = calculateDistancesFromStart(grid);
@@ -130,7 +126,6 @@ export function analyzeSuperSecret(grid: RoomType[][]): AnalysisGrid {
             if (grid[r][c] !== 'empty') continue;
 
             let neighborCount = 0;
-            let touchesBlocked = false;
             let singleNeighborPos: { r: number; c: number } | null = null;
             let singleNeighborType: RoomType | null = null;
 
@@ -139,8 +134,7 @@ export function analyzeSuperSecret(grid: RoomType[][]): AnalysisGrid {
                 const nc = c + dc;
                 if (inBounds(nr, nc)) {
                     const type = grid[nr][nc];
-                    if (type === 'blocked') touchesBlocked = true;
-                    else if (type !== 'empty') {
+                    if (type !== 'empty' && type !== 'blocked') {
                         neighborCount++;
                         singleNeighborPos = { r: nr, c: nc };
                         singleNeighborType = type;
@@ -148,8 +142,7 @@ export function analyzeSuperSecret(grid: RoomType[][]): AnalysisGrid {
                 }
             }
 
-            // Regola: esattamente 1 vicino e deve essere 'normal'
-            if (!touchesBlocked && neighborCount === 1 && singleNeighborType === 'normal' && singleNeighborPos) {
+            if (neighborCount === 1 && singleNeighborType === 'normal' && singleNeighborPos) {
                 const d = distances[singleNeighborPos.r][singleNeighborPos.c];
                 const reasons: string[] = [];
                 let score = 10;
@@ -178,7 +171,6 @@ export function analyzeSuperSecret(grid: RoomType[][]): AnalysisGrid {
     return normalizePercentages(rawScores);
 }
 
-// 3. Ultra Secret Room Analyzer (Corretto)
 export function analyzeUltraSecret(grid: RoomType[][]): AnalysisGrid {
     const rawScores: (CellAnalysis | null)[][] = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
 
@@ -186,7 +178,6 @@ export function analyzeUltraSecret(grid: RoomType[][]): AnalysisGrid {
         for (let c = 0; c < GRID_SIZE; c++) {
             if (grid[r][c] !== 'empty') continue;
 
-            // VINCOLO 1: L'Ultra Secret NON deve toccare direttamente nessuna stanza reale o bloccata
             let directlyTouchesRealRoom = false;
             for (const { r: dr, c: dc } of DIRS) {
                 const nr = r + dr;
@@ -202,7 +193,6 @@ export function analyzeUltraSecret(grid: RoomType[][]): AnalysisGrid {
 
             if (directlyTouchesRealRoom) continue;
 
-            // VINCOLO 2: Cerca stanze reali raggiungibili tramite 1 Red Room (adiacente alla candidata)
             const connectedRooms = new Set<string>();
             let touchesForbiddenRedRoom = false;
 
@@ -211,25 +201,22 @@ export function analyzeUltraSecret(grid: RoomType[][]): AnalysisGrid {
                 const redC = c + dc;
 
                 if (!inBounds(redR, redC)) continue;
-                if (grid[redR][redC] !== 'empty') continue; // Deve essere una potenziale Red Room (spazio vuoto)
+                if (grid[redR][redC] !== 'empty') continue;
 
-                // Controlliamo cosa tocca questa potenziale Red Room
                 for (const d2 of DIRS) {
                     const targetR = redR + d2.r;
                     const targetC = redC + d2.c;
 
                     if (inBounds(targetR, targetC)) {
-                        if (targetR === r && targetC === c) continue; // Salta la US stessa
+                        if (targetR === r && targetC === c) continue;
 
                         const t = grid[targetR][targetC];
 
-                        // Le Red Room NON possono connettere a Boss o Curse
                         if (t === 'boss' || t === 'curse') {
                             touchesForbiddenRedRoom = true;
                             break;
                         }
 
-                        // Conta le stanze valide raggiunte (Normal, Start, Shop, Special)
                         if (t === 'normal' || t === 'start' || t === 'shop' || t === 'special') {
                             connectedRooms.add(`${targetR},${targetC}`);
                         }
